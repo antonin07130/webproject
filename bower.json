@@ -1,0 +1,6 @@
+{
+  "name": "webproject",
+  "dependencies": {
+    "bootstrap": "latest"
+  }
+}
