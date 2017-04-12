@@ -4,20 +4,17 @@
     <meta charset="UTF-8">
     <title>TOto</title>
     <!-- bootstrap dependencies -->
-    <link rel="stylesheet" type="text/css" ref="bower_components/bootstrap/dist/css/bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="bower_components/bootstrap/dist/css/bootstrap.css">
     <!-- dc.js dependencies -->
-    <link rel="stylesheet" type="text/css" ref="bower_components/dc.js/dc.css">
+    <link rel="stylesheet" type="text/css" href="bower_components/dc.js/dc.css">
 
     <!-- Custom styles for this template -->
-    <link href="css/dashboard_template.css" rel="stylesheet">
+    <!--<link href="css/dashboard_template.css" rel="stylesheet">-->
 
 </head>
 
 
 <body>
-<p>toto</p>
-
-
 
 
 <!-- bootstrap dependencies -->
@@ -34,75 +31,157 @@
 <div class="container">
 
     <div class="starter-template">
-        <h1>Bootstrap starter template</h1>
-        <p class="lead">Use this document as a way to quickly start any new project.<br> All you get is this text and a mostly barebones HTML document.</p>
+        <h1>KPI 1.1 alpha : Taux de digitalisation du suivi de commande.</h1>
+        <p class="lead">Taux de digitalisation des suivis de commande.<br> Resultats obtenus à partir de MongoDb.</p>
     </div>
 
     <div id="test"></div>
 
+    <div id="test2"></div>
 
     <script type="text/javascript">
+
         var chart = dc.barChart("#test");
+        var lineChart = dc.lineChart('#test2');
 
-        var dateFormater = d3.time.format.utc("%d/%m/%y");
 
-        function row(d) {
+        var dateFormat = d3.time.format("%d/%m/%y");
+
+        function toObj(d) {
             console.log(d);
             console.log("converted");
             return {
-                date: dateFormater.parse(d.date), // convert "Year" column to Date
-                txDigitalization: +d.TxDigitalization
+                date: dateFormat.parse(d.date), // parse dates as js Date objects
+                txDigitalization: d3.round(+d.TxDigitalization * 100) // coerce to number in %
             };
         }
 
+        function reduceAddAvg(field){
+          return function reduceAddAvg(p,v) {
+              ++p.count;
+              p.sum += v[field];
+              p.avg = p.sum/p.count;
+              return p;
+          };
+        };
 
-        function reduceAddAvg(p,v) {
-            ++p.count;
-            p.sum += v.txDigitalization;
-            p.avg = p.sum/p.count;
-            return p;
-        }
-        function reduceRemoveAvg(p,v) {
-            --p.count
-            p.sum -= v.txDigitalization;
-            p.avg = p.sum/p.count;
-            return p;
-        }
+        function reduceRemoveAvg(field){
+          return function reduceRemoveAvg(p,v) {
+              --p.count
+              p.sum -= v[field];
+              p.avg = p.sum/p.count;
+              return p;
+          };
+        };
+
         function reduceInitAvg() {
             return {count:0, sum:0, avg:0};
         }
 
 
-        d3.tsv("data/fake_digitalization_rate.tsv",row ,  function(error, experiments) {
+        d3.tsv("data/fake_digitalization_rate.tsv",toObj ,  function(error, experiments) {
 
-            experiments.forEach(function(x) { // convert input data
+            experiments.forEach(function(x) { // display data
                 console.log(x);
             });
 
             var ndx                 = crossfilter(experiments);
-            var yearDimension  = ndx.dimension(function(d) {return d.date;}); // create a date index
-            var rateDimension = ndx.dimension(function(d) {return d.txDigitalization;}); // create a date index
-            var meanRateByYearGroup = yearDimension // group dataset on date index computing mean value of rate
-                    .group(function(d) {return d.getUTCFullYear();}) // group by year
-                    .reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg); //.reduceSum(function(d) {return d.Speed * d.Run / 1000;});*/
+            var yearlyDimension     = ndx.dimension(function(d) {return d3.time.year(d.date);}); // create a date index
+            var monthDimension      = ndx.dimension(function(d) {return d3.time.month.floor(d.date);});
+
+            var yearlyMeanGroup     = yearlyDimension.group()
+                    .reduce(reduceAddAvg("txDigitalization"),
+                            reduceRemoveAvg("txDigitalization"),
+                            reduceInitAvg);
+            var monthlyMeanGroup    = monthDimension.group()
+                    .reduce(reduceAddAvg("txDigitalization"),
+                            reduceRemoveAvg("txDigitalization"),
+                            reduceInitAvg);
+
+
 
             chart
                 .width(768)
                 .height(480)
-                .x(d3.scale.linear().domain([2014,2016]))
+                .margins({top: 50, right: 50, bottom: 50, left: 50})
+                .dimension(monthDimension)
+                .group(yearlyMeanGroup)
+                .x(d3.scale.ordinal())
+                .xUnits(dc.units.ordinal)
+                //.x(d3.time.scale().domain([new Date(2014, 0, 1), new Date(2018, 0, 2)]))
+                //.round(d3.time.year.floor)
+                //.alwaysUseRounding(true)
+                //.xUnits(d3.time.years)
+                //.elasticX(true)
+                .xAxisLabel("Année")
+                .y(d3.scale.linear().domain([0, 100]))
+                .yAxisLabel("Suivis de commande digitaux (%)")
                 .brushOn(false)
-                .yAxisLabel("This is the Y Axis!")
-                .dimension(rateDimension)
-                .group(meanRateByYearGroup)
                 .valueAccessor(function (p) {
                     return p.value.avg;
                 })
-                .on('renderlet', function(chart) {
-                    chart.selectAll('rect').on("click", function(d) {
-                        console.log("click!", d);
-                    });
-                });
+                .label(function (p) {
+                    return p.key;
+                })
+                //.on('renderlet', function(chart) { // todo filter the selected year on click
+                //    chart.selectAll('rect').on("click", function(d) {
+                //        console.log("click!", d);
+                //        console.log("click!", d.data);
+                //        console.log("click!", d.data.value);
+                //    });
+                //})
+                ;
+
+             //chart.xAxis().ticks(d3.time.year,1);
+
+
+
+
+
+
+
+
+
+            lineChart
+              //.renderArea(true)
+              .width(990)
+              .height(200)
+              .transitionDuration(1000)
+              .margins({top: 30, right: 50, bottom: 25, left: 40})
+              .dimension(monthDimension)
+              .mouseZoomable(true)
+              //.rangeChart(volumeChart)
+              .x(d3.time.scale().domain([new Date(2014, 0, 1), new Date(2018, 0, 1)]))
+              .round(d3.time.month.round)
+              .xUnits(d3.time.months)
+              //.elasticX(true)
+              .y(d3.scale.linear().domain([0, 100]))
+              //.elasticY(true)
+              .renderHorizontalGridLines(true)
+              //.legend(dc.legend().x(800).y(10).itemHeight(13).gap(5))
+              .brushOn(false)
+              .group(monthlyMeanGroup)
+              .valueAccessor(function (d) {
+                return d.value.avg;
+              })
+
             chart.render();
+            lineChart.render();
+
+
+
+
+
+
+
+
+//d3.select(".line").attr("fill-opacity", 0);
+
+
+
+
+
+
         });
     </script>
 
