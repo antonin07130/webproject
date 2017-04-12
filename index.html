@@ -5,13 +5,32 @@
     <title>TOto</title>
     <!-- bootstrap dependencies -->
     <link rel="stylesheet" type="text/css" ref="bower_components/bootstrap/dist/css/bootstrap.css">
+    <!-- dc.js dependencies -->
+    <link rel="stylesheet" type="text/css" ref="bower_components/dc.js/dc.css">
 
     <!-- Custom styles for this template -->
     <link href="css/dashboard_template.css" rel="stylesheet">
 
 </head>
+
+
 <body>
 <p>toto</p>
+
+
+
+
+<!-- bootstrap dependencies -->
+<script src="bower_components/jquery/dist/jquery.js"></script>
+<script src="bower_components/bootstrap/dist/js/bootstrap.js"></script>
+
+<!-- dc.js dependencies -->
+<script type="text/javascript" src="bower_components/d3/d3.js"></script>
+<script type="text/javascript" src="bower_components/crossfilter2/crossfilter.js"></script>
+<script type="text/javascript" src="bower_components/dc.js/dc.js"></script>
+
+
+
 <div class="container">
 
     <div class="starter-template">
@@ -19,9 +38,79 @@
         <p class="lead">Use this document as a way to quickly start any new project.<br> All you get is this text and a mostly barebones HTML document.</p>
     </div>
 
+    <div id="test"></div>
+
+
+    <script type="text/javascript">
+        var chart = dc.barChart("#test");
+
+        var dateFormater = d3.time.format.utc("%d/%m/%y");
+
+        function row(d) {
+            console.log(d);
+            console.log("converted");
+            return {
+                date: dateFormater.parse(d.date), // convert "Year" column to Date
+                txDigitalization: +d.TxDigitalization
+            };
+        }
+
+
+        function reduceAddAvg(p,v) {
+            ++p.count;
+            p.sum += v.txDigitalization;
+            p.avg = p.sum/p.count;
+            return p;
+        }
+        function reduceRemoveAvg(p,v) {
+            --p.count
+            p.sum -= v.txDigitalization;
+            p.avg = p.sum/p.count;
+            return p;
+        }
+        function reduceInitAvg() {
+            return {count:0, sum:0, avg:0};
+        }
+
+
+        d3.tsv("data/fake_digitalization_rate.tsv",row ,  function(error, experiments) {
+
+            experiments.forEach(function(x) { // convert input data
+                console.log(x);
+            });
+
+            var ndx                 = crossfilter(experiments);
+            var yearDimension  = ndx.dimension(function(d) {return d.date;}); // create a date index
+            var rateDimension = ndx.dimension(function(d) {return d.txDigitalization;}); // create a date index
+            var meanRateByYearGroup = yearDimension // group dataset on date index computing mean value of rate
+                    .group(function(d) {return d.getUTCFullYear();}) // group by year
+                    .reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg); //.reduceSum(function(d) {return d.Speed * d.Run / 1000;});*/
+
+            chart
+                .width(768)
+                .height(480)
+                .x(d3.scale.linear().domain([2014,2016]))
+                .brushOn(false)
+                .yAxisLabel("This is the Y Axis!")
+                .dimension(rateDimension)
+                .group(meanRateByYearGroup)
+                .valueAccessor(function (p) {
+                    return p.value.avg;
+                })
+                .on('renderlet', function(chart) {
+                    chart.selectAll('rect').on("click", function(d) {
+                        console.log("click!", d);
+                    });
+                });
+            chart.render();
+        });
+    </script>
+
+
 </div>
-<!-- bootstrap dependencies -->
-<script src="bower_components/jquery/dist/jquery.js"></script>
-<script src="bower_components/bootstrap/dist/js/bootstrap.js"></script>
+
+
 </body>
+
+
 </html>

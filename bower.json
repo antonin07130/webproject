@@ -1,6 +1,7 @@
 {
   "name": "webproject",
   "dependencies": {
-    "bootstrap": "latest"
+    "bootstrap": "latest",
+    "dc.js": "latest"
   }
 }
